@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+
+# Pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+
+# Logs
+*.log
+
+# SQLite / base de données locales
+*.db
+*.sqlite3
+
+# Coverage / tests
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# FastAPI / Uvicorn
+__pycache__/
+*.pyc
+
+
+.env

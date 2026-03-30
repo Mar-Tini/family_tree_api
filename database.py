@@ -1,0 +1,71 @@
+import os
+from dotenv import load_dotenv
+from pymongo import MongoClient, ASCENDING
+
+load_dotenv()
+
+# =========================
+# CONFIG
+# =========================
+MONGODB_URL = os.getenv("MONGO_URI")
+DB_NAME = "tree_family"
+
+COLLECTIONS = {
+    "members": "members",
+    "relationships": "relationships",
+    "trees": "trees",
+    "users": "users",
+    "otps": "otps"
+}
+
+# =========================
+# CONNECTION
+# =========================
+client = MongoClient(
+    MONGODB_URL,
+    serverSelectionTimeoutMS=5000  # évite blocage Docker
+)
+
+db = client[DB_NAME]
+
+
+# =========================
+# INIT DATABASE (INDEX ONLY)
+# =========================
+def init_db():
+    """
+    Crée les index MongoDB.
+    Fonction idempotente (safe à appeler plusieurs fois).
+    """
+
+    try:
+        # MEMBERS
+        db[COLLECTIONS["members"]].create_index("id", unique=True)
+
+        # RELATIONSHIPS
+        db[COLLECTIONS["relationships"]].create_index("parentId")
+        db[COLLECTIONS["relationships"]].create_index("childId")
+
+        # TREES
+        db[COLLECTIONS["trees"]].create_index("treeId", unique=True)
+
+        # USERS
+        db[COLLECTIONS["users"]].create_index(
+            [("email", ASCENDING)],
+            unique=True
+        )
+
+        # OTPS
+        db[COLLECTIONS["otps"]].create_index("otpId", unique=True)
+
+        print("MongoDB indexes initialized successfully.")
+
+    except Exception as e:
+        print(f"Mongo init error: {e}")
+
+
+# =========================
+# FASTAPI DEPENDENCY
+# =========================
+def get_db():
+    return db
