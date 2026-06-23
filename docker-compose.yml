@@ -5,27 +5,32 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - mongo
+      - db
     environment:
-      MONGO_URL: mongodb://root:root@mongo:27017/?authSource=admin
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/tree_family
     volumes:
       - .:/app
 
-  mongo:
-    image: mongo:7
-    container_name: mongo_db
+  db:
+    image: postgres:15
+    container_name: postgres_db
 
     ports:
-      - "27017:27017"
+      - "5432:5432"
+
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tree_family
+
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-        test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-        interval: 10s
-        timeout: 5s
-        retries: 5
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
-  mongo_data:
+  postgres_data:
