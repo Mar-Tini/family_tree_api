@@ -25,3 +25,6 @@ email-validator==2.1.1
 
 
 pytest==7.4.4
+
+pymongo[srv]==4.6.1
+dnspython
