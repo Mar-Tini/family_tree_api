@@ -24,7 +24,8 @@ if "asyncpg" not in DATABASE_URL:
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,  # better for production (avoid heavy logs on Render)
-    future=True
+    future=True, 
+    connect_args={"ssl": True}
 )
 
 # Session factory
