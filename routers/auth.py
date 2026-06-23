@@ -14,7 +14,9 @@ from sqlalchemy import select
 from dotenv import load_dotenv
 
 from database import get_db
-from models import OTP, User, FamilyTree, Relationships
+
+# IMPORTANT: must be SQLAlchemy models (NOT Pydantic)
+from models_sql import OTPModel, UserModel, FamilyTreeModel, RelationshipModel
 
 # Load env
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -36,6 +38,7 @@ class OTPVerifyRequest(BaseModel):
     email: str
     code: str
 
+
 # ---------------- EMAIL ----------------
 def send_email(to_email: str, code: str):
     msg = MIMEText(f"Votre code de vérification est : {code}")
@@ -48,20 +51,23 @@ def send_email(to_email: str, code: str):
         server.login(SMTPEMAIL, SMTPPASS)
         server.sendmail(SMTPEMAIL, to_email, msg.as_string())
 
+
 # ---------------- REQUEST CODE ----------------
 @router.post("/request-code")
 async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 
     code = str(random.randint(100000, 999999))
 
-    result = await db.execute(select(OTP).where(OTP.email == data.email))
-    old_otp = result.scalar_one_or_none()
+    result = await db.execute(
+        select(OTPModel).where(OTPModel.email == data.email)
+    )
+    old_otp = result.scalars().first()
 
     if old_otp:
         await db.delete(old_otp)
         await db.commit()
 
-    otp = OTP(
+    otp = OTPModel(
         email=data.email,
         code=code,
         expire_at=datetime.utcnow() + timedelta(minutes=5)
@@ -74,12 +80,15 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 
     return {"message": "Code envoyé"}
 
+
 # ---------------- VERIFY CODE ----------------
 @router.post("/verify-code")
 async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(select(OTP).where(OTP.email == data.email))
-    otp = result.scalar_one_or_none()
+    result = await db.execute(
+        select(OTPModel).where(OTPModel.email == data.email)
+    )
+    otp = result.scalars().first()
 
     if not otp:
         raise HTTPException(400, "Aucun code trouvé")
@@ -93,44 +102,55 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
     await db.delete(otp)
     await db.commit()
 
-    result = await db.execute(select(User).where(User.email == data.email))
-    user = result.scalar_one_or_none()
+    # USER
+    result = await db.execute(
+        select(UserModel).where(UserModel.email == data.email)
+    )
+    user = result.scalars().first()
 
     if user:
         user.status = True
     else:
-        user = User(email=data.email, status=True)
+        user = UserModel(email=data.email, status=True)
         db.add(user)
 
     await db.commit()
+    await db.refresh(user)
 
+    # FAMILY TREE
     result = await db.execute(
-        select(FamilyTree).where(FamilyTree.ownerId == str(user.id))
+        select(FamilyTreeModel).where(FamilyTreeModel.ownerId == str(user.id))
     )
-    tree = result.scalar_one_or_none()
+    tree = result.scalars().first()
 
     if not tree:
-        tree = FamilyTree(
+        tree = FamilyTreeModel(
             treeId=str(uuid4()),
             name="Nouvel arbre",
             ownerId=str(user.id),
             members=[],
-            relationships=Relationships()
+            relationships={}
         )
         db.add(tree)
         await db.commit()
 
     return {
         "message": "OK",
-        "user": {"email": user.email, "status": user.status}
+        "user": {
+            "email": user.email,
+            "status": user.status
+        }
     }
+
 
 # ---------------- LOGOUT ----------------
 @router.post("/logout/{userId}")
 async def logout(userId: str, db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(select(User).where(User.id == userId))
-    user = result.scalar_one_or_none()
+    result = await db.execute(
+        select(UserModel).where(UserModel.id == userId)
+    )
+    user = result.scalars().first()
 
     if not user:
         raise HTTPException(404, "Utilisateur non trouvé")
