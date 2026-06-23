@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from database import get_db
 
 # IMPORTANT: must be SQLAlchemy models (NOT Pydantic)
-from models_sql import OTPModel, UserModel, FamilyTreeModel, RelationshipModel
+from models import OTPModel, UserModel, FamilyTreeModel, RelationshipModel
 
 # Load env
 env_path = Path(__file__).resolve().parent.parent / ".env"
