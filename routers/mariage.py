@@ -1,42 +1,63 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import Marriage
-from database import db   # ta connexion Mongo
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from database import get_db
+from models import Marriage, Relationship, Member
 
 router = APIRouter(prefix="/marriages", tags=["marriages"])
 
-
+# ---------------- GET ALL MARRIAGES ----------------
 @router.get("/", response_model=List[Marriage])
-def get_marriages():
-    marriages = list(db["relationships"].find(
-        {"type": "marriage"},   # on filtre seulement les mariages
-        {"_id": 0}
-    ))
+async def get_marriages(db: AsyncSession = Depends(get_db)):
+
+    result = await db.execute(
+        select(Relationship).where(Relationship.type == "marriage")
+    )
+
+    marriages = result.scalars().all()
     return marriages
 
 
+# ---------------- ADD MARRIAGE ----------------
 @router.post("/", response_model=Marriage)
-def add_marriage(marriage: Marriage):
-    # Vérifier si le mariage existe déjà (même set de spouseIds)
-    existing = db["relationships"].find_one({
-        "type": "marriage",
-        "spouseIds": {"$all": marriage.spouseIds, "$size": len(marriage.spouseIds)}
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Marriage already exists")
+async def add_marriage(marriage: Marriage, db: AsyncSession = Depends(get_db)):
 
-    # Sauvegarder le mariage
-    db["relationships"].insert_one({
-        "type": "marriage",
-        **marriage.dict()
-    })
-
-    # Mettre à jour les membres (ajout du spouseId)
-    for spouse_id in marriage.spouseIds:
-        other_spouse = [s for s in marriage.spouseIds if s != spouse_id][0]
-        db["members"].update_one(
-            {"id": spouse_id},
-            {"$set": {"spouseId": other_spouse}}
+    # Check if marriage already exists (same spouses)
+    result = await db.execute(
+        select(Relationship).where(
+            Relationship.type == "marriage"
         )
+    )
 
-    return marriage
+    existing = result.scalars().all()
+
+    for e in existing:
+        if set(e.spouseIds) == set(marriage.spouseIds):
+            raise HTTPException(status_code=400, detail="Marriage already exists")
+
+    # Create marriage
+    new_marriage = Relationship(
+        type="marriage",
+        spouseIds=marriage.spouseIds
+    )
+
+    db.add(new_marriage)
+    await db.commit()
+    await db.refresh(new_marriage)
+
+    # Update members (link spouses)
+    for spouse_id in marriage.spouseIds:
+        result = await db.execute(
+            select(Member).where(Member.id == spouse_id)
+        )
+        member = result.scalar_one_or_none()
+
+        if member:
+            other_spouse = [s for s in marriage.spouseIds if s != spouse_id][0]
+            member.spouseId = other_spouse
+
+    await db.commit()
+
+    return new_marriage

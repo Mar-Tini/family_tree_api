@@ -1,41 +1,73 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import ParentChild
-from database import db  
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from database import get_db
+from models import ParentChild, Relationship, Member
 
 router = APIRouter(prefix="/parentchild", tags=["parentchild"])
 
+# ---------------- GET ALL ----------------
 @router.get("/", response_model=List[ParentChild])
-def get_parentchild():
-    rels = list(db["relationships"].find({"type": "parentChild"}, {"_id": 0}))
-    return rels
+async def get_parentchild(db: AsyncSession = Depends(get_db)):
+
+    result = await db.execute(
+        select(Relationship).where(Relationship.type == "parentChild")
+    )
+
+    return result.scalars().all()
 
 
+# ---------------- ADD RELATION ----------------
 @router.post("/", response_model=ParentChild)
-def add_parentchild(rel: ParentChild):
-    # Vérifier si la relation existe déjà
-    existing = db["relationships"].find_one({
-        "type": "parentChild",
-        "parentId": rel.parentId,
-        "childId": rel.childId
-    })
+async def add_parentchild(rel: ParentChild, db: AsyncSession = Depends(get_db)):
+
+    # check existing relation
+    result = await db.execute(
+        select(Relationship).where(
+            Relationship.type == "parentChild",
+            Relationship.parentId == rel.parentId,
+            Relationship.childId == rel.childId
+        )
+    )
+
+    existing = result.scalar_one_or_none()
+
     if existing:
         raise HTTPException(status_code=400, detail="Relation already exists")
 
-    # Ajouter la relation
-    db["relationships"].insert_one({
-        "type": "parentChild",
-        **rel.dict()
-    })
-
-    # Mettre à jour les références dans "members"
-    db["members"].update_one(
-        {"id": rel.parentId},
-        {"$addToSet": {"childrenIds": rel.childId}}
-    )
-    db["members"].update_one(
-        {"id": rel.childId},
-        {"$addToSet": {"parentIds": rel.parentId}}
+    # create relation
+    new_rel = Relationship(
+        type="parentChild",
+        parentId=rel.parentId,
+        childId=rel.childId
     )
 
-    return rel
+    db.add(new_rel)
+
+    # update parent
+    result = await db.execute(
+        select(Member).where(Member.id == rel.parentId)
+    )
+    parent = result.scalar_one_or_none()
+
+    if parent:
+        if not parent.childrenIds:
+            parent.childrenIds = []
+        parent.childrenIds.append(rel.childId)
+
+    # update child
+    result = await db.execute(
+        select(Member).where(Member.id == rel.childId)
+    )
+    child = result.scalar_one_or_none()
+
+    if child:
+        if not child.parentIds:
+            child.parentIds = []
+        child.parentIds.append(rel.parentId)
+
+    await db.commit()
+
+    return new_rel
