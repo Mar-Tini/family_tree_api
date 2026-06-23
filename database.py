@@ -19,7 +19,9 @@ DB_NAME = "tree_family"
 # =========================
 client = MongoClient(
     MONGODB_URL,
-    serverSelectionTimeoutMS=5000  # évite blocage Docker
+    tls=True,
+    tlsAllowInvalidCertificates=True,
+    serverSelectionTimeoutMS=5000
 )
 
 db = client[DB_NAME]
