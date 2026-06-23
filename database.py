@@ -21,9 +21,11 @@ DB_NAME = "tree_family"
 client = MongoClient(
     MONGODB_URL,
     tls=True,
-    tlsAllowInvalidCertificates=True,
-    serverSelectionTimeoutMS=5000,
-    tlsCAFile=certifi.where()
+    tlsCAFile=certifi.where(),  
+    serverSelectionTimeoutMS=10000,
+    connectTimeoutMS=10000,
+    socketTimeoutMS=20000,
+    retryWrites=True,
 )
 
 db = client[DB_NAME]
