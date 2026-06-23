@@ -24,7 +24,7 @@ DB_NAME = "tree_family"
 client = AsyncIOMotorClient(
     MONGODB_URL,
     tls=True,
-    tlsAllowInvalidCertificates=True,  # ← désactive la vérification
+    tlsAllowInvalidCertificates=True,
     serverSelectionTimeoutMS=10000,
 )
 
