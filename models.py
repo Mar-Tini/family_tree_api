@@ -1,17 +1,21 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel
-    
-class User(BaseModel): 
+from datetime import datetime
+
+
+class User(BaseModel):
     userId: str
-    email:  str
-    status: bool = False 
-    
+    email: str
+    status: bool = False
+
+
 class OTP(BaseModel):
-    id : str
-    email : str
+    id: str
+    email: str
     code: str
-    expire_at : str
-    
+    expire_at: datetime   # FIX important
+
+
 class Member(BaseModel):
     id: str
     firstName: str
@@ -21,34 +25,37 @@ class Member(BaseModel):
     birthDate: Optional[str] = None
     deathDate: Optional[str] = None
     photo: Optional[str] = None
-    spouseId: Optional[str] = None 
-    parentIds: Optional[List[str]] = None
-    childrenIds: Optional[List[str]] = None
-    userId : str
+    spouseId: Optional[str] = None
+    parentIds: Optional[List[str]] = []
+    childrenIds: Optional[List[str]] = []
+    userId: str
+
 
 class Marriage(BaseModel):
     id: str
-    spouseIds: List[str]              
+    spouseIds: List[str]
     marriageDate: Optional[str] = None
-    childrenIds: Optional[List[str]] = None
-    userId : str
-    
+    childrenIds: Optional[List[str]] = []
+    userId: str
+
+
 class ParentChild(BaseModel):
     id: str
     parentId: str
     childId: str
-    userId : str
+    userId: str
+
 
 class Relationships(BaseModel):
     marriages: List[Marriage] = []
     parentChild: List[ParentChild] = []
-    userId :  Optional[str] = None
-    
-    
+    userId: Optional[str] = None
+
+
 class FamilyTree(BaseModel):
     treeId: str
     name: str
-    ownerId: str 
+    ownerId: str
     members: List[Member] = []
     relationships: Relationships = Relationships()
     published: bool = False
