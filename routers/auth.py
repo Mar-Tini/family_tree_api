@@ -14,7 +14,7 @@ from sqlalchemy import select
 from dotenv import load_dotenv
 
 from database import get_db
-from models import OTP, User, FamilyTree, Relationships
+from models_sql import OTP, User, FamilyTree, Relationships
 
 # Load env
 env_path = Path(__file__).resolve().parent.parent / ".env"

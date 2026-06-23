@@ -1,83 +1,61 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, JSON
-from database import Base
+from typing import List, Optional
+from pydantic import BaseModel
+from datetime import datetime
 
 
-class User(Base):
-    __tablename__ = "users"
-
-    userId = Column(String, primary_key=True)
-    email = Column(String, unique=True, index=True)
-    status = Column(Boolean, default=False)
+class User(BaseModel):
+    userId: str
+    email: str
+    status: bool = False
 
 
-class OTP(Base):
-    __tablename__ = "otps"
-
-    id = Column(String, primary_key=True)
-    email = Column(String, index=True)
-    code = Column(String)
-    expire_at = Column(DateTime)
+class OTP(BaseModel):
+    id: str
+    email: str
+    code: str
+    expire_at: datetime   # FIX important
 
 
-class Member(Base):
-    __tablename__ = "members"
-
-    id = Column(String, primary_key=True)
-    firstName = Column(String)
-    lastName = Column(String)
-    gender = Column(String)
-    generation = Column(Integer)
-
-    birthDate = Column(String, nullable=True)
-    deathDate = Column(String, nullable=True)
-    photo = Column(String, nullable=True)
-
-    spouseId = Column(String, nullable=True)
-
-    parentIds = Column(JSON, default=list)
-    childrenIds = Column(JSON, default=list)
-
-    userId = Column(String, index=True)
+class Member(BaseModel):
+    id: str
+    firstName: str
+    lastName: str
+    gender: str
+    generation: int
+    birthDate: Optional[str] = None
+    deathDate: Optional[str] = None
+    photo: Optional[str] = None
+    spouseId: Optional[str] = None
+    parentIds: Optional[List[str]] = []
+    childrenIds: Optional[List[str]] = []
+    userId: str
 
 
-class Marriage(Base):
-    __tablename__ = "marriages"
-
-    id = Column(String, primary_key=True)
-    spouseIds = Column(JSON, default=list)
-    marriageDate = Column(String, nullable=True)
-    childrenIds = Column(JSON, default=list)
-    userId = Column(String, index=True)
+class Marriage(BaseModel):
+    id: str
+    spouseIds: List[str]
+    marriageDate: Optional[str] = None
+    childrenIds: Optional[List[str]] = []
+    userId: str
 
 
-class ParentChild(Base):
-    __tablename__ = "parentchild"
-
-    id = Column(String, primary_key=True)
-    parentId = Column(String, index=True)
-    childId = Column(String, index=True)
-    userId = Column(String, index=True)
+class ParentChild(BaseModel):
+    id: str
+    parentId: str
+    childId: str
+    userId: str
 
 
-class Relationships(Base):
-    __tablename__ = "relationships"
-
-    id = Column(String, primary_key=True)
-    userId = Column(String, index=True)
-
-    marriages = Column(JSON, default=list)
-    parentChild = Column(JSON, default=list)
+class Relationships(BaseModel):
+    marriages: List[Marriage] = []
+    parentChild: List[ParentChild] = []
+    userId: Optional[str] = None
 
 
-class FamilyTree(Base):
-    __tablename__ = "familytrees"
-
-    treeId = Column(String, primary_key=True)
-    name = Column(String)
-    ownerId = Column(String, index=True)
-
-    members = Column(JSON, default=list)
-
-    relationships = Column(JSON, default=dict)
-
-    published = Column(Boolean, default=False)
+class FamilyTree(BaseModel):
+    treeId: str
+    name: str
+    ownerId: str
+    members: List[Member] = []
+    relationships: Relationships = Relationships()
+    published: bool = False

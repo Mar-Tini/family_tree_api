@@ -5,8 +5,7 @@ from sqlalchemy import select
 
 from database import get_db
 
-# ✅ SQLAlchemy models (IMPORTANT FIX)
-from models import Marriage, Relationships, Member
+from models_sql import Marriage, Relationships, Member
 
 router = APIRouter(prefix="/marriages", tags=["marriages"])
 
