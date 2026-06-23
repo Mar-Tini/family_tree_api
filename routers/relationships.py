@@ -4,16 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models import Marriage, ParentChild, Relationship
+from models import Marriage, ParentChild, Relationships
 
-router = APIRouter(prefix="/relationships", tags=["relationships"])
+router = APIRouter(prefix="/Relationships", tags=["Relationships"])
 
 # ---------------- GET MARRIAGES ----------------
 @router.get("/marriages", response_model=List[Marriage])
 async def get_marriages(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
-        select(Relationship).where(Relationship.type == "marriage")
+        select(Relationships).where(Relationships.type == "marriage")
     )
 
     return result.scalars().all()
@@ -24,7 +24,7 @@ async def get_marriages(db: AsyncSession = Depends(get_db)):
 async def get_parent_child(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
-        select(Relationship).where(Relationship.type == "parentChild")
+        select(Relationships).where(Relationships.type == "parentChild")
     )
 
     return result.scalars().all()
