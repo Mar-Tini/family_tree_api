@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient, ASCENDING
+import certifi
 
 load_dotenv()
 
@@ -21,7 +22,8 @@ client = MongoClient(
     MONGODB_URL,
     tls=True,
     tlsAllowInvalidCertificates=True,
-    serverSelectionTimeoutMS=5000
+    serverSelectionTimeoutMS=5000,
+    tlsCAFile=certifi.where()
 )
 
 db = client[DB_NAME]
