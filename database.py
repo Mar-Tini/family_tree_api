@@ -11,9 +11,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL is missing in environment variables")
 
-DB_NAME = "tree_family"
+# REMOVE THIS (not used in PostgreSQL)
+# DB_NAME = "tree_family"
 
-# Engine (Neon PostgreSQL)
+# Ensure async driver is used
+if "asyncpg" not in DATABASE_URL:
+    raise Exception("DATABASE_URL must use asyncpg driver: postgresql+asyncpg://")
+
+# Engine
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
@@ -26,11 +31,10 @@ SessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-# Base for models
+# Base model
 Base = declarative_base()
 
-
-# Dependency (replacement of get_db)
+# Dependency
 async def get_db():
     async with SessionLocal() as session:
         yield session
