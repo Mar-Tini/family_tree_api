@@ -18,3 +18,6 @@ client = AsyncIOMotorClient(
     serverSelectionTimeoutMS=10000,
 )
 db = client[DB_NAME]
+
+def get_db():
+    return db
