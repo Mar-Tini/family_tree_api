@@ -1,23 +1,36 @@
 import os
 from dotenv import load_dotenv
-from pymongo import ASCENDING
-from motor.motor_asyncio import AsyncIOMotorClient
-import certifi
+
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 load_dotenv()
 
-MONGODB_URL = os.getenv("MONGO_URI")
-if not MONGODB_URL:
-    raise Exception("MONGO_URI is missing in environment variables")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL is missing in environment variables")
 
 DB_NAME = "tree_family"
 
-client = AsyncIOMotorClient(
-    MONGODB_URL,
-    tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=10000,
+# Engine (Neon PostgreSQL)
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
 )
-db = client[DB_NAME]
 
-def get_db():
-    return db
+# Session factory
+SessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# Base for models
+Base = declarative_base()
+
+
+# Dependency (replacement of get_db)
+async def get_db():
+    async with SessionLocal() as session:
+        yield session

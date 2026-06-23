@@ -3,15 +3,19 @@ uvicorn[standard]==0.27.1
 python-multipart==0.0.9
 pydantic==2.6.4
 
-pymongo[srv]==3.12
-dnspython==1.16.0
-
 python-dotenv==1.0.1
 httpx==0.27.0
+
 passlib[bcrypt]==1.7.4
 python-jose==3.3.0
+
 certifi>=2024.2.2
 
-motor==2.5.1
+# PostgreSQL (NEW)
+sqlalchemy==2.0.29
+asyncpg==0.29.0
+
+# optional migrations
+alembic==1.13.1
 
 pytest==7.4.4
