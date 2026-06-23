@@ -8,12 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
+
+# ✅ FIX: SQLAlchemy model (NOT Pydantic)
 from models import Member
 
 router = APIRouter(prefix="/members", tags=["members"])
 
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 # ---------------- GET ALL MEMBERS ----------------
 @router.get("/", response_model=List[Member])
@@ -32,7 +35,7 @@ async def get_member(member_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Member).where(Member.id == member_id)
     )
-    member = result.scalar_one_or_none()
+    member = result.scalars().first()
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -47,13 +50,14 @@ async def add_member(new_member: Member, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Member).where(Member.id == new_member.id)
     )
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Member ID already exists")
 
     db.add(new_member)
     await db.commit()
+    await db.refresh(new_member)
 
     return new_member
 
@@ -72,7 +76,7 @@ async def update_member(member_id: str, updated_member: MemberModify, db: AsyncS
     result = await db.execute(
         select(Member).where(Member.id == member_id)
     )
-    member = result.scalar_one_or_none()
+    member = result.scalars().first()
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -83,6 +87,7 @@ async def update_member(member_id: str, updated_member: MemberModify, db: AsyncS
     member.deathDate = updated_member.deathDate
 
     await db.commit()
+    await db.refresh(member)
 
     return updated_member
 
@@ -94,7 +99,7 @@ async def delete_member(member_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Member).where(Member.id == member_id)
     )
-    member = result.scalar_one_or_none()
+    member = result.scalars().first()
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -112,7 +117,7 @@ async def upload_image(member_id: str, file: UploadFile = File(...), db: AsyncSe
     result = await db.execute(
         select(Member).where(Member.id == member_id)
     )
-    member = result.scalar_one_or_none()
+    member = result.scalars().first()
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -125,6 +130,7 @@ async def upload_image(member_id: str, file: UploadFile = File(...), db: AsyncSe
     member.photo = f"/static/uploads/{member_id}.jpg"
 
     await db.commit()
+    await db.refresh(member)
 
     return {
         "message": "Image uploaded",
