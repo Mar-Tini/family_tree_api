@@ -1,25 +1,34 @@
-# app/main.py
 import os
-from uuid import uuid4
-from bson import ObjectId
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
-from pydantic import BaseModel
-import random, smtplib, ssl
+import random
+import smtplib
+import ssl
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
-
-from pytest import Session
-from database import db, get_db  
-from models import OTP, FamilyTree, Member, Relationships, User
-from pydantic import BaseModel
-from dotenv import load_dotenv
-import os
+from uuid import uuid4
 from pathlib import Path
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from dotenv import load_dotenv
 
+from database import get_db
+from models import OTP, User, FamilyTree, Relationships
+
+# Load env
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+# ---------------- ENV SMTP ----------------
+SMTPSERVER = os.getenv("SMTP_SERVER")
+SMTPPORT = int(os.getenv("SMTP_PORT", 465))
+SMTPEMAIL = os.getenv("SMTP_EMAIL")
+SMTPPASS = os.getenv("SMTP_PASSWORD")
+
+# ---------------- REQUEST MODELS ----------------
 class EmailRequest(BaseModel):
     email: str
 
@@ -27,13 +36,7 @@ class OTPVerifyRequest(BaseModel):
     email: str
     code: str
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-
-SMTPSERVER = os.getenv("SMTP_SERVER")
-SMTPPORT = int(os.getenv("SMTP_PORT", 465))
-SMTPEMAIL = os.getenv("SMTP_EMAIL")
-SMTPPASS = os.getenv("SMTP_PASSWORD")
-
+# ---------------- EMAIL ----------------
 def send_email(to_email: str, code: str):
     msg = MIMEText(f"Votre code de vérification est : {code}")
     msg["Subject"] = "Code de vérification"
@@ -45,90 +48,94 @@ def send_email(to_email: str, code: str):
         server.login(SMTPEMAIL, SMTPPASS)
         server.sendmail(SMTPEMAIL, to_email, msg.as_string())
 
+# ---------------- REQUEST CODE ----------------
 @router.post("/request-code")
-def request_code(data: EmailRequest):
-    code = f"{random.randint(100000, 999999)}"
+async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 
-    # supprimer l'ancien OTP s'il existe
-    db["otp"].delete_one({"email": data.email})
+    code = str(random.randint(100000, 999999))
 
-    # stocker OTP en DB
-    db["otp"].insert_one({
-        "email": data.email,
-        "code": code,
-        "expire_at": datetime.utcnow() + timedelta(minutes=5)
-    })
+    result = await db.execute(select(OTP).where(OTP.email == data.email))
+    old_otp = result.scalar_one_or_none()
 
-    try:
-        send_email(data.email, code)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur envoi email: {e}")
+    if old_otp:
+        await db.delete(old_otp)
+        await db.commit()
+
+    otp = OTP(
+        email=data.email,
+        code=code,
+        expire_at=datetime.utcnow() + timedelta(minutes=5)
+    )
+
+    db.add(otp)
+    await db.commit()
+
+    send_email(data.email, code)
 
     return {"message": "Code envoyé"}
 
-
-
+# ---------------- VERIFY CODE ----------------
 @router.post("/verify-code")
-def verify_code(data: OTPVerifyRequest):
-    # Vérifier OTP
-    otp_entry = db["otp"].find_one({"email": data.email})
-    if not otp_entry:
-        raise HTTPException(status_code=400, detail="Aucun code trouvé")
-    if datetime.utcnow() > otp_entry["expire_at"]:
-        raise HTTPException(status_code=400, detail="Code expiré")
-    if otp_entry["code"] != data.code:
-        raise HTTPException(status_code=400, detail="Code invalide")
+async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
 
-    # supprimer OTP après usage
-    db["otp"].delete_one({"email": data.email})
+    result = await db.execute(select(OTP).where(OTP.email == data.email))
+    otp = result.scalar_one_or_none()
 
-    # Vérifier si l'utilisateur existe
-    existing_user = db["users"].find_one({"email": data.email})
-    if existing_user:
-        user_id = str(existing_user["_id"])
-        # mettre à jour le status à True
-        db["users"].update_one({"_id": existing_user["_id"]}, {"$set": {"status": True}})
-        user = {"userId": user_id, "email": existing_user["email"], "status": True}
+    if not otp:
+        raise HTTPException(400, "Aucun code trouvé")
+
+    if datetime.utcnow() > otp.expire_at:
+        raise HTTPException(400, "Code expiré")
+
+    if otp.code != data.code:
+        raise HTTPException(400, "Code invalide")
+
+    await db.delete(otp)
+    await db.commit()
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        user.status = True
     else:
-        # créer utilisateur
-        result = db["users"].insert_one({"email": data.email, "status": True})
-        user_id = str(result.inserted_id)
-        user = {"userId": user_id, "email": data.email, "status": True}
+        user = User(email=data.email, status=True)
+        db.add(user)
 
-    # Créer un nouvel arbre
-    # Vérifier si aucun arbre pour cet utilisateur
-    trees_count = db.trees.count_documents({"ownerId": user_id})
-    if trees_count == 0:
-        new_tree = FamilyTree(
+    await db.commit()
+
+    result = await db.execute(
+        select(FamilyTree).where(FamilyTree.ownerId == str(user.id))
+    )
+    tree = result.scalar_one_or_none()
+
+    if not tree:
+        tree = FamilyTree(
             treeId=str(uuid4()),
             name="Nouvel arbre",
-            ownerId=user_id,
+            ownerId=str(user.id),
             members=[],
             relationships=Relationships()
         )
-        db.trees.insert_one(new_tree.dict())
-
-    # Récupérer tous les arbres pour l'utilisateur
-    trees = list(db.trees.find({"ownerId": user_id}))
-    for t in trees:
-        t["treeId"] = str(t["_id"])  # convertir ObjectId en str
-        t.pop("_id", None)
+        db.add(tree)
+        await db.commit()
 
     return {
-        "message": "Utilisateur et arbre vérifiés/créés avec succès",
-        "user": user,
-        "trees": trees
+        "message": "OK",
+        "user": {"email": user.email, "status": user.status}
     }
-    
-    
-    
+
+# ---------------- LOGOUT ----------------
 @router.post("/logout/{userId}")
-def logout(userId : str):
- 
-    user = db.users.find_one({"_id": ObjectId(userId)})
+async def logout(userId: str, db: AsyncSession = Depends(get_db)):
+
+    result = await db.execute(select(User).where(User.id == userId))
+    user = result.scalar_one_or_none()
+
     if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    
-    # Mettre status à False
-    db.users.update_one({"_id": ObjectId(userId)}, {"$set": {"status": False}})
+        raise HTTPException(404, "Utilisateur non trouvé")
+
+    user.status = False
+    await db.commit()
+
     return {"message": "Utilisateur déconnecté avec succès"}
