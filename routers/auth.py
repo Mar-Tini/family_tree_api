@@ -64,6 +64,7 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
         await db.commit()
 
     otp = OTP(
+        id=str(uuid4()),
         email=data.email,
         code=code,
         expire_at=datetime.utcnow() + timedelta(minutes=5)
@@ -96,19 +97,25 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
     await db.delete(otp)
     await db.commit()
 
+    # ---------------- USER ----------------
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalars().first()
 
     if user:
         user.status = True
     else:
-        user = User(email=data.email, status=True)
+        user = User(
+            userId=str(uuid4()),
+            email=data.email,
+            status=True
+        )
         db.add(user)
         await db.commit()
         await db.refresh(user)
 
+    # ---------------- FAMILY TREE ----------------
     result = await db.execute(
-        select(FamilyTree).where(FamilyTree.ownerId == str(user.id))
+        select(FamilyTree).where(FamilyTree.ownerId == user.userId)
     )
     tree = result.scalars().first()
 
@@ -116,16 +123,21 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
         tree = FamilyTree(
             treeId=str(uuid4()),
             name="Nouvel arbre",
-            ownerId=str(user.id),
+            ownerId=user.userId,
             members=[],
-            relationships=Relationships()
+            relationships=Relationships(),
+            published=False
         )
         db.add(tree)
         await db.commit()
 
     return {
         "message": "OK",
-        "user": {"email": user.email, "status": user.status}
+        "user": {
+            "email": user.email,
+            "status": user.status,
+            "userId": user.userId
+        }
     }
 
 
@@ -133,7 +145,7 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
 @router.post("/logout/{userId}")
 async def logout(userId: str, db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(select(User).where(User.id == userId))
+    result = await db.execute(select(User).where(User.userId == userId))
     user = result.scalars().first()
 
     if not user:
