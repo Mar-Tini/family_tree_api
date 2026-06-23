@@ -3,7 +3,7 @@ import os
 from uuid import uuid4
 from bson import ObjectId
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 import random, smtplib, ssl
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pytest import Session
 from database import db, get_db  
 from models import OTP, FamilyTree, Member, Relationships, User
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 from pathlib import Path
@@ -21,10 +21,10 @@ env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 class EmailRequest(BaseModel):
-    email: EmailStr
+    email: str
 
 class OTPVerifyRequest(BaseModel):
-    email: EmailStr
+    email: str
     code: str
 
 router = APIRouter(prefix="/auth", tags=["auth"])
