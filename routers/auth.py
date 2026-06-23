@@ -14,9 +14,7 @@ from sqlalchemy import select
 from dotenv import load_dotenv
 
 from database import get_db
-
-# IMPORTANT: must be SQLAlchemy models (NOT Pydantic)
-from models import OTPModel, UserModel, FamilyTreeModel, RelationshipModel
+from models import OTP, User, FamilyTree, Relationships
 
 # Load env
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -58,16 +56,14 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 
     code = str(random.randint(100000, 999999))
 
-    result = await db.execute(
-        select(OTPModel).where(OTPModel.email == data.email)
-    )
+    result = await db.execute(select(OTP).where(OTP.email == data.email))
     old_otp = result.scalars().first()
 
     if old_otp:
         await db.delete(old_otp)
         await db.commit()
 
-    otp = OTPModel(
+    otp = OTP(
         email=data.email,
         code=code,
         expire_at=datetime.utcnow() + timedelta(minutes=5)
@@ -85,9 +81,7 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/verify-code")
 async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(
-        select(OTPModel).where(OTPModel.email == data.email)
-    )
+    result = await db.execute(select(OTP).where(OTP.email == data.email))
     otp = result.scalars().first()
 
     if not otp:
@@ -102,44 +96,36 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
     await db.delete(otp)
     await db.commit()
 
-    # USER
-    result = await db.execute(
-        select(UserModel).where(UserModel.email == data.email)
-    )
+    result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalars().first()
 
     if user:
         user.status = True
     else:
-        user = UserModel(email=data.email, status=True)
+        user = User(email=data.email, status=True)
         db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
-    await db.commit()
-    await db.refresh(user)
-
-    # FAMILY TREE
     result = await db.execute(
-        select(FamilyTreeModel).where(FamilyTreeModel.ownerId == str(user.id))
+        select(FamilyTree).where(FamilyTree.ownerId == str(user.id))
     )
     tree = result.scalars().first()
 
     if not tree:
-        tree = FamilyTreeModel(
+        tree = FamilyTree(
             treeId=str(uuid4()),
             name="Nouvel arbre",
             ownerId=str(user.id),
             members=[],
-            relationships={}
+            relationships=Relationships()
         )
         db.add(tree)
         await db.commit()
 
     return {
         "message": "OK",
-        "user": {
-            "email": user.email,
-            "status": user.status
-        }
+        "user": {"email": user.email, "status": user.status}
     }
 
 
@@ -147,9 +133,7 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
 @router.post("/logout/{userId}")
 async def logout(userId: str, db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(
-        select(UserModel).where(UserModel.id == userId)
-    )
+    result = await db.execute(select(User).where(User.id == userId))
     user = result.scalars().first()
 
     if not user:
