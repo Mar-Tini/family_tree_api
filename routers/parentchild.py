@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models import ParentChild, Relationship, Member
+from models import ParentChild, Relationships, Member
 
 router = APIRouter(prefix="/parentchild", tags=["parentchild"])
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/parentchild", tags=["parentchild"])
 async def get_parentchild(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
-        select(Relationship).where(Relationship.type == "parentChild")
+        select(Relationships).where(Relationships.type == "parentChild")
     )
 
     return result.scalars().all()
@@ -25,10 +25,10 @@ async def add_parentchild(rel: ParentChild, db: AsyncSession = Depends(get_db)):
 
     # check existing relation
     result = await db.execute(
-        select(Relationship).where(
-            Relationship.type == "parentChild",
-            Relationship.parentId == rel.parentId,
-            Relationship.childId == rel.childId
+        select(Relationships).where(
+            Relationships.type == "parentChild",
+            Relationships.parentId == rel.parentId,
+            Relationships.childId == rel.childId
         )
     )
 
@@ -38,7 +38,7 @@ async def add_parentchild(rel: ParentChild, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Relation already exists")
 
     # create relation
-    new_rel = Relationship(
+    new_rel = Relationships(
         type="parentChild",
         parentId=rel.parentId,
         childId=rel.childId

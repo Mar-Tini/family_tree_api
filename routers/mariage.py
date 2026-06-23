@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models import Marriage, Relationship, Member
+from models import Marriage, Relationships, Member
 
 router = APIRouter(prefix="/marriages", tags=["marriages"])
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/marriages", tags=["marriages"])
 async def get_marriages(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
-        select(Relationship).where(Relationship.type == "marriage")
+        select(Relationships).where(Relationships.type == "marriage")
     )
 
     marriages = result.scalars().all()
@@ -26,8 +26,8 @@ async def add_marriage(marriage: Marriage, db: AsyncSession = Depends(get_db)):
 
     # Check if marriage already exists (same spouses)
     result = await db.execute(
-        select(Relationship).where(
-            Relationship.type == "marriage"
+        select(Relationships).where(
+            Relationships.type == "marriage"
         )
     )
 
@@ -38,7 +38,7 @@ async def add_marriage(marriage: Marriage, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Marriage already exists")
 
     # Create marriage
-    new_marriage = Relationship(
+    new_marriage = Relationships(
         type="marriage",
         spouseIds=marriage.spouseIds
     )
