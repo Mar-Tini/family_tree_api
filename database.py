@@ -20,9 +20,11 @@ DB_NAME = "tree_family"
 # =========================
 # CONNECTION
 # =========================
+
 client = AsyncIOMotorClient(
     MONGODB_URL,
-    tlsCAFile=certifi.where(),
+    tls=True,
+    tlsAllowInvalidCertificates=True,  # ← désactive la vérification
     serverSelectionTimeoutMS=10000,
 )
 
