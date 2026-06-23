@@ -15,6 +15,7 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://family-tree-n7zw3jxrs-0-tinis-projects.vercel.app/"
 ]
 
 app.add_middleware(
