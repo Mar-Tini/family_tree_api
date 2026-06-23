@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient, ASCENDING
+from motor.motor_asyncio import AsyncIOMotorClient
 import certifi
+
 
 load_dotenv()
 
@@ -18,14 +20,10 @@ DB_NAME = "tree_family"
 # =========================
 # CONNECTION
 # =========================
-client = MongoClient(
+client = AsyncIOMotorClient(
     MONGODB_URL,
-    tls=True,
-    tlsCAFile=certifi.where(),  
+    tlsCAFile=certifi.where(),
     serverSelectionTimeoutMS=10000,
-    connectTimeoutMS=10000,
-    socketTimeoutMS=20000,
-    retryWrites=True,
 )
 
 db = client[DB_NAME]
