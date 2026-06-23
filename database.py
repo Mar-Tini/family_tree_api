@@ -25,6 +25,7 @@ client = AsyncIOMotorClient(
     MONGODB_URL,
     tls=True,
     tlsAllowInvalidCertificates=True,
+    tlsCAFile=certifi.where(),
     serverSelectionTimeoutMS=10000,
 )
 
