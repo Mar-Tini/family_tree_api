@@ -8,16 +8,12 @@ load_dotenv()
 # CONFIG
 # =========================
 MONGODB_URL = os.getenv("MONGO_URI")
+
+
+if not MONGODB_URL:
+    raise Exception("MONGO_URL is missing in environment variables")
+
 DB_NAME = "tree_family"
-
-COLLECTIONS = {
-    "members": "members",
-    "relationships": "relationships",
-    "trees": "trees",
-    "users": "users",
-    "otps": "otps"
-}
-
 # =========================
 # CONNECTION
 # =========================
@@ -28,6 +24,13 @@ client = MongoClient(
 
 db = client[DB_NAME]
 
+COLLECTIONS = {
+    "members": "members",
+    "relationships": "relationships",
+    "trees": "trees",
+    "users": "users",
+    "otps": "otps"
+}
 
 # =========================
 # INIT DATABASE (INDEX ONLY)
