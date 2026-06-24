@@ -14,20 +14,20 @@ router = APIRouter(prefix="/marriages", tags=["marriages"])
 @router.get("/", response_model=List[MarriageSchema])
 async def get_marriages(db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(
-        select(Relationships)
-    )
-
+    result = await db.execute(select(Relationships))
     relations = result.scalars().all()
 
-    marriages_out = []
+    output = []
 
     for r in relations:
-        if not r.marriages:
+        if not isinstance(r.marriages, list):
             continue
 
         for m in r.marriages:
-            marriages_out.append(
+            if not isinstance(m, dict):
+                continue
+
+            output.append(
                 MarriageSchema(
                     id=m.get("id"),
                     spouseIds=m.get("spouseIds", []),
@@ -37,19 +37,20 @@ async def get_marriages(db: AsyncSession = Depends(get_db)):
                 )
             )
 
-    return marriages_out
+    return output
 
 
 # ---------------- ADD MARRIAGE ----------------
 @router.post("/", response_model=MarriageSchema)
 async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_db)):
 
-    # get or create relationship row
     result = await db.execute(
         select(Relationships).where(Relationships.userId == marriage.userId)
     )
+
     relation = result.scalars().first()
 
+    # CREATE IF NOT EXISTS
     if not relation:
         relation = Relationships(
             userId=marriage.userId,
@@ -59,16 +60,17 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
         await db.commit()
         await db.refresh(relation)
 
-    # ensure marriages list exists
-    if relation.marriages is None:
+    # SAFE INIT (VERY IMPORTANT)
+    if not isinstance(relation.marriages, list):
         relation.marriages = []
 
-    # check duplicate
+    # CHECK DUPLICATE
     for m in relation.marriages:
-        if set(m.get("spouseIds", [])) == set(marriage.spouseIds):
-            raise HTTPException(status_code=400, detail="Marriage already exists")
+        if isinstance(m, dict):
+            if set(m.get("spouseIds", [])) == set(marriage.spouseIds):
+                raise HTTPException(status_code=400, detail="Marriage already exists")
 
-    # add new marriage
+    # CREATE NEW MARRIAGE (DICT ONLY)
     new_marriage = {
         "id": marriage.id,
         "spouseIds": marriage.spouseIds,
@@ -87,6 +89,7 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
         result = await db.execute(
             select(Member).where(Member.id == spouse_id)
         )
+
         member = result.scalars().first()
 
         if member:
