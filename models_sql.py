@@ -1,7 +1,7 @@
 # models_sql.py
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, JSON
 from database import Base
-
+import uuid
 
 class User(Base):
     __tablename__ = "users"
@@ -63,7 +63,7 @@ class ParentChild(Base):
 class Relationships(Base):
     __tablename__ = "relationships"
 
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     userId = Column(String, index=True)
 
     marriages = Column(JSON, default=list)

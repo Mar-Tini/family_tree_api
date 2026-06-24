@@ -57,7 +57,8 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
     if not relation:
         relation = Relationships(
             userId=marriage.userId,
-            marriages=[]
+            marriages=[],
+            parentChild=[]
         )
         db.add(relation)
         await db.commit()
@@ -84,7 +85,7 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
         "userId": marriage.userId
     }
 
-    # IMPORTANT FIX (no append mutation)
+    # SAFE UPDATE (no append mutation)
     relation.marriages = existing + [new_marriage]
 
     await db.commit()

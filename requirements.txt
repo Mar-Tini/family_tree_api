@@ -24,3 +24,5 @@ bson
 psycopg2
 
 resend
+
+uuid
