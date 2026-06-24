@@ -13,7 +13,7 @@ class OTP(BaseModel):
     id: str
     email: str
     code: str
-    expire_at: datetime   # FIX important
+    expire_at: datetime 
 
 
 class Member(BaseModel):
