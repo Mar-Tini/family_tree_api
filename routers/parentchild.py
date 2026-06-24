@@ -2,17 +2,17 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from uuid import uuid4
 
 from database import get_db
-from models_sql import ParentChild, Member   # FIXED IMPORT
+from models_sql import ParentChild, Member
+
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/parentchild", tags=["parentchild"])
 
 
-# ---------------- SCHEMA (Pydantic) ----------------
-from pydantic import BaseModel
-
-
+# ---------------- SCHEMA ----------------
 class ParentChildCreate(BaseModel):
     parentId: str
     childId: str
@@ -52,35 +52,44 @@ async def add_parentchild(rel: ParentChildCreate, db: AsyncSession = Depends(get
 
     # create relation
     new_rel = ParentChild(
-        id=str(uuid4()),
+        id=str(uuid4()),   # ✅ FIX IMPORTANT
         parentId=rel.parentId,
         childId=rel.childId
     )
 
     db.add(new_rel)
 
-    # update parent
+    # ---------------- UPDATE PARENT ----------------
     result = await db.execute(
         select(Member).where(Member.id == rel.parentId)
     )
     parent = result.scalars().first()
 
     if parent:
-        parent.childrenIds = parent.childrenIds or []
-        if rel.childId not in parent.childrenIds:
-            parent.childrenIds.append(rel.childId)
+        current = parent.childrenIds or []
 
-    # update child
+        if not isinstance(current, list):
+            current = []
+
+        if rel.childId not in current:
+            parent.childrenIds = current + [rel.childId]   # SAFE UPDATE
+
+    # ---------------- UPDATE CHILD ----------------
     result = await db.execute(
         select(Member).where(Member.id == rel.childId)
     )
     child = result.scalars().first()
 
     if child:
-        child.parentIds = child.parentIds or []
-        if rel.parentId not in child.parentIds:
-            child.parentIds.append(rel.parentId)
+        current = child.parentIds or []
+
+        if not isinstance(current, list):
+            current = []
+
+        if rel.parentId not in current:
+            child.parentIds = current + [rel.parentId]   # SAFE UPDATE
 
     await db.commit()
+    await db.refresh(new_rel)
 
     return new_rel

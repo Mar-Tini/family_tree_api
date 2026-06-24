@@ -54,7 +54,7 @@ class Marriage(Base):
 class ParentChild(Base):
     __tablename__ = "parentchild"
 
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     parentId = Column(String, index=True)
     childId = Column(String, index=True)
     userId = Column(String, index=True)
