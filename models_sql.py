@@ -1,3 +1,4 @@
+# models_sql.py
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, JSON
 from database import Base
 

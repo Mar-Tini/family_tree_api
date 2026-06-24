@@ -1,3 +1,4 @@
+# shemas.py
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -24,6 +25,8 @@ class OTPSchema(BaseModel):
 
 
 # ---------------- MEMBER ----------------
+
+
 class MemberSchema(BaseModel):
     id: str
     firstName: str
@@ -36,27 +39,26 @@ class MemberSchema(BaseModel):
     photo: Optional[str] = None
 
     spouseId: Optional[str] = None
-    parentIds: List[str] = []
-    childrenIds: List[str] = []
+
+    parentIds: List[str] = Field(default_factory=list)
+    childrenIds: List[str] = Field(default_factory=list)
 
     userId: str
 
     class Config:
         from_attributes = True
-
-
+        
 # ---------------- MARRIAGE ----------------
+
 class MarriageSchema(BaseModel):
     id: str
-    spouseIds: List[str]
+    spouseIds: List[str] = Field(default_factory=list)
     marriageDate: Optional[str] = None
-    childrenIds: List[str] = []
+    childrenIds: List[str] = Field(default_factory=list)
     userId: Optional[str] = None
 
     class Config:
         from_attributes = True
-
-
 # ---------------- RELATIONSHIPS ----------------
 class RelationshipsSchema(BaseModel):
     id: Optional[str] = None
