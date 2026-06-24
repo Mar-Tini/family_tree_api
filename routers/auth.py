@@ -17,10 +17,10 @@ from models_sql import OTP, User, FamilyTree
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # ---------------- ENV ----------------
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_EMAIL = os.getenv("SMTP_EMAIL")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_EMAIL = os.getenv("SMTP_EMAIL", "mart00tini@gmail.com")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD","yogqfwbbneibskqk")
 
 
 # ---------------- CHECK SMTP ----------------
