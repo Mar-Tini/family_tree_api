@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from database import get_db
 from models_sql import Relationships, Member
@@ -20,10 +21,12 @@ async def get_marriages(db: AsyncSession = Depends(get_db)):
     output = []
 
     for r in relations:
-        if not isinstance(r.marriages, list):
-            continue
+        marriages = r.marriages
 
-        for m in r.marriages:
+        if not isinstance(marriages, list):
+            marriages = []
+
+        for m in marriages:
             if not isinstance(m, dict):
                 continue
 
@@ -60,9 +63,9 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
         await db.commit()
         await db.refresh(relation)
 
-    # SAFE INIT (VERY IMPORTANT)
+    # SAFE INIT
     if not isinstance(relation.marriages, list):
-        relation.marriages = []
+        relation.marriages = list(relation.marriages or [])
 
     # CHECK DUPLICATE
     for m in relation.marriages:
@@ -70,7 +73,7 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
             if set(m.get("spouseIds", [])) == set(marriage.spouseIds):
                 raise HTTPException(status_code=400, detail="Marriage already exists")
 
-    # CREATE NEW MARRIAGE (DICT ONLY)
+    # NEW MARRIAGE
     new_marriage = {
         "id": marriage.id,
         "spouseIds": marriage.spouseIds,
@@ -80,6 +83,9 @@ async def add_marriage(marriage: MarriageSchema, db: AsyncSession = Depends(get_
     }
 
     relation.marriages.append(new_marriage)
+
+    # IMPORTANT FIX (SQLAlchemy JSON update tracking)
+    flag_modified(relation, "marriages")
 
     await db.commit()
     await db.refresh(relation)
