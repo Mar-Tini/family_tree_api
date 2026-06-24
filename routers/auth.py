@@ -23,10 +23,10 @@ SMTPEMAIL = os.getenv("SMTP_EMAIL")
 SMTPPASS = os.getenv("SMTP_PASSWORD")
 
 
-# ---------------- SAFETY CHECK ----------------
+# ---------------- CHECK SMTP ----------------
 def check_smtp_config():
     if not SMTPSERVER or not SMTPEMAIL or not SMTPPASS:
-        raise Exception("SMTP environment variables are missing on Render")
+        raise HTTPException(status_code=500, detail="SMTP not configured")
 
 
 # ---------------- REQUEST MODELS ----------------
@@ -41,6 +41,7 @@ class OTPVerifyRequest(BaseModel):
 
 # ---------------- EMAIL ----------------
 def send_email(to_email: str, code: str):
+
     check_smtp_config()
 
     msg = MIMEText(f"Votre code de vérification est : {code}")
@@ -51,48 +52,49 @@ def send_email(to_email: str, code: str):
     context = ssl.create_default_context()
 
     try:
-        # Render-friendly SMTP (STARTTLS, not SSL)
         with smtplib.SMTP(SMTPSERVER, SMTPPORT, timeout=10) as server:
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
-
             server.login(SMTPEMAIL, SMTPPASS)
             server.sendmail(SMTPEMAIL, to_email, msg.as_string())
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Email sending failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Email error: {str(e)}")
 
 
 # ---------------- REQUEST CODE ----------------
 @router.post("/request-code")
 async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
 
-    code = str(random.randint(100000, 999999))
+    try:
+        code = str(random.randint(100000, 999999))
 
-    result = await db.execute(select(OTP).where(OTP.email == data.email))
-    old_otp = result.scalars().first()
+        # delete old OTP
+        result = await db.execute(select(OTP).where(OTP.email == data.email))
+        old_otp = result.scalars().first()
 
-    if old_otp:
-        await db.delete(old_otp)
+        if old_otp:
+            await db.delete(old_otp)
+            await db.commit()
+
+        otp = OTP(
+            id=str(uuid4()),
+            email=data.email,
+            code=code,
+            expire_at=datetime.utcnow() + timedelta(minutes=5)
+        )
+
+        db.add(otp)
         await db.commit()
 
-    otp = OTP(
-        id=str(uuid4()),
-        email=data.email,
-        code=code,
-        expire_at=datetime.utcnow() + timedelta(minutes=5)
-    )
+        # IMPORTANT: email after DB success
+        send_email(data.email, code)
 
-    db.add(otp)
-    await db.commit()
+        return {"message": "Code envoyé"}
 
-    send_email(data.email, code)
-
-    return {"message": "Code envoyé"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------- VERIFY CODE ----------------
@@ -127,8 +129,9 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
             status=True
         )
         db.add(user)
-        await db.commit()
-        await db.refresh(user)
+
+    await db.commit()
+    await db.refresh(user)
 
     # ---------------- FAMILY TREE ----------------
     result = await db.execute(
@@ -142,7 +145,7 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
             name="Nouvel arbre",
             ownerId=user.userId,
             members=[],
-            relationships={},   # FIX (no ORM object inside JSON)
+            relationships={},   # safe JSON
             published=False
         )
         db.add(tree)
