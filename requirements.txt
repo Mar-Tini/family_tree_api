@@ -22,3 +22,5 @@ pytest==7.4.4
 
 bson
 psycopg2
+
+resend

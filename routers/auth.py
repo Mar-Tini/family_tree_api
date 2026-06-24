@@ -1,10 +1,9 @@
 import os
 import random
-import smtplib
-import ssl
-from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from uuid import uuid4
+
+import resend
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -16,20 +15,13 @@ from models_sql import OTP, User, FamilyTree
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# ---------------- ENV ----------------
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_EMAIL = os.getenv("SMTP_EMAIL", "mart00tini@gmail.com")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD","yogqfwbbneibskqk")
+# ---------------- RESEND ----------------
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+resend.api_key = RESEND_API_KEY
 
 
-# ---------------- CHECK SMTP ----------------
-# def check_smtp_config():
-  #  if not SMTP_SERVER or not SMTP_EMAIL or not SMTP_PASSWORD:
-       # raise HTTPException(status_code=500, detail="SMTP not configured")
-
-
-# ---------------- REQUEST MODELS ----------------
+# ---------------- MODELS ----------------
 class EmailRequest(BaseModel):
     email: str
 
@@ -39,28 +31,17 @@ class OTPVerifyRequest(BaseModel):
     code: str
 
 
-# ---------------- EMAIL ----------------
+# ---------------- SEND EMAIL ----------------
 def send_email(to_email: str, code: str):
-
-    # check_smtp_config()
-
-    msg = MIMEText(f"Votre code de vérification est : {code}")
-    msg["Subject"] = "Code de vérification"
-    msg["From"] = SMTP_EMAIL
-    msg["To"] = to_email
-
-    context = ssl.create_default_context()
-
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-
+        resend.Emails.send({
+            "from": "Family Tree <onboarding@resend.dev>",
+            "to": to_email,
+            "subject": "Code de vérification",
+            "html": f"<p>Votre code est : <b>{code}</b></p>"
+        })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Email error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Resend error: {str(e)}")
 
 
 # ---------------- REQUEST CODE ----------------
@@ -70,7 +51,6 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
     try:
         code = str(random.randint(100000, 999999))
 
-        # delete old OTP
         result = await db.execute(select(OTP).where(OTP.email == data.email))
         old_otp = result.scalars().first()
 
@@ -88,7 +68,6 @@ async def request_code(data: EmailRequest, db: AsyncSession = Depends(get_db)):
         db.add(otp)
         await db.commit()
 
-        # IMPORTANT: email after DB success
         send_email(data.email, code)
 
         return {"message": "Code envoyé"}
@@ -116,7 +95,6 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
     await db.delete(otp)
     await db.commit()
 
-    # ---------------- USER ----------------
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalars().first()
 
@@ -133,7 +111,6 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(user)
 
-    # ---------------- FAMILY TREE ----------------
     result = await db.execute(
         select(FamilyTree).where(FamilyTree.ownerId == user.userId)
     )
@@ -145,7 +122,7 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
             name="Nouvel arbre",
             ownerId=user.userId,
             members=[],
-            relationships={},   # safe JSON
+            relationships={},
             published=False
         )
         db.add(tree)
