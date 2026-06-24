@@ -43,6 +43,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://family-tree-n7zw3jxrs-0-tinis-projects.vercel.app", 
+        "https://family-tree-liard-psi.vercel.app/"
         "https://vercel.app",
         "https://*.vercel.app"
     ],
