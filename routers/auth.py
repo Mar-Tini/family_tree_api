@@ -5,32 +5,34 @@ import ssl
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from uuid import uuid4
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from dotenv import load_dotenv
 
 from database import get_db
-from models_sql import OTP, User, FamilyTree, Relationships
-
-# Load env
-env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
+from models_sql import OTP, User, FamilyTree
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# ---------------- ENV SMTP ----------------
+# ---------------- ENV ----------------
 SMTPSERVER = os.getenv("SMTP_SERVER")
-SMTPPORT = int(os.getenv("SMTP_PORT", 465))
+SMTPPORT = int(os.getenv("SMTP_PORT", "587"))
 SMTPEMAIL = os.getenv("SMTP_EMAIL")
 SMTPPASS = os.getenv("SMTP_PASSWORD")
+
+
+# ---------------- SAFETY CHECK ----------------
+def check_smtp_config():
+    if not SMTPSERVER or not SMTPEMAIL or not SMTPPASS:
+        raise Exception("SMTP environment variables are missing on Render")
+
 
 # ---------------- REQUEST MODELS ----------------
 class EmailRequest(BaseModel):
     email: str
+
 
 class OTPVerifyRequest(BaseModel):
     email: str
@@ -39,15 +41,30 @@ class OTPVerifyRequest(BaseModel):
 
 # ---------------- EMAIL ----------------
 def send_email(to_email: str, code: str):
+    check_smtp_config()
+
     msg = MIMEText(f"Votre code de vérification est : {code}")
     msg["Subject"] = "Code de vérification"
     msg["From"] = SMTPEMAIL
     msg["To"] = to_email
 
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(SMTPSERVER, SMTPPORT, context=context) as server:
-        server.login(SMTPEMAIL, SMTPPASS)
-        server.sendmail(SMTPEMAIL, to_email, msg.as_string())
+
+    try:
+        # Render-friendly SMTP (STARTTLS, not SSL)
+        with smtplib.SMTP(SMTPSERVER, SMTPPORT, timeout=10) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+
+            server.login(SMTPEMAIL, SMTPPASS)
+            server.sendmail(SMTPEMAIL, to_email, msg.as_string())
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Email sending failed: {str(e)}"
+        )
 
 
 # ---------------- REQUEST CODE ----------------
@@ -125,7 +142,7 @@ async def verify_code(data: OTPVerifyRequest, db: AsyncSession = Depends(get_db)
             name="Nouvel arbre",
             ownerId=user.userId,
             members=[],
-            relationships=Relationships(),
+            relationships={},   # FIX (no ORM object inside JSON)
             published=False
         )
         db.add(tree)
