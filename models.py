@@ -58,4 +58,4 @@ class FamilyTree(BaseModel):
     ownerId: str
     members: List[Member] = []
     relationships: Relationships = Relationships()
-    published: bool = False
+    published: bool = True

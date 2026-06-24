@@ -80,4 +80,4 @@ class FamilyTree(Base):
 
     relationships = Column(JSON, default=dict)
 
-    published = Column(Boolean, default=False)
+    published = Column(Boolean, default=True)
