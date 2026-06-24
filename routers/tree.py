@@ -8,6 +8,8 @@ from sqlalchemy import select
 from database import get_db
 from models_sql import FamilyTree, Member, Marriage, ParentChild, Relationships
 
+from schemas import FamilyTreeSchema  # ✅ ONLY ADD THIS
+
 router = APIRouter(prefix="/trees", tags=["trees"])
 
 familyTrees: List[FamilyTree] = []
@@ -108,7 +110,7 @@ async def build_tree_from_get_db(user_id: str, db: AsyncSession) -> List[FamilyT
 
 
 # ---------------- GET TREES ----------------
-@router.get("/", response_model=List[FamilyTree])
+@router.get("/", response_model=List[FamilyTreeSchema])  # ✅ FIX
 async def get_trees(user_id: str = None, db: AsyncSession = Depends(get_db)):
 
     if user_id:
@@ -124,7 +126,7 @@ async def get_trees(user_id: str = None, db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- GET ALL ----------------
-@router.get("/all", response_model=List[FamilyTree])
+@router.get("/all", response_model=List[FamilyTreeSchema])  # ✅ FIX
 async def get_all_trees(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
@@ -135,7 +137,7 @@ async def get_all_trees(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- FIND MEMBERS TREE ----------------
-@router.get("/find_members/{user_id}", response_model=FamilyTree)
+@router.get("/find_members/{user_id}", response_model=FamilyTreeSchema)  # ✅ FIX
 async def get_tree(user_id: str, db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
@@ -151,7 +153,7 @@ async def get_tree(user_id: str, db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- ADD TREE ----------------
-@router.post("/add/{userid}", response_model=List[FamilyTree])
+@router.post("/add/{userid}", response_model=List[FamilyTreeSchema])  # ✅ FIX
 async def get_user_trees(userid: str, db: AsyncSession = Depends(get_db)):
 
     return await build_tree_from_get_db(userid, db)
@@ -235,7 +237,7 @@ async def create_or_update_family_tree(userId: str, db: AsyncSession):
 
 
 # ---------------- FAMILY TREE ENDPOINT ----------------
-@router.get("/familytree/{userId}", response_model=FamilyTree)
+@router.get("/familytree/{userId}", response_model=FamilyTreeSchema)
 async def get_tree_family(userId: str, db: AsyncSession = Depends(get_db)):
 
     return await create_or_update_family_tree(userId, db)
