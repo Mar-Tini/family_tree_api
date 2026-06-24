@@ -17,16 +17,16 @@ from models_sql import OTP, User, FamilyTree
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # ---------------- ENV ----------------
-SMTPSERVER = os.getenv("SMTP_SERVER")
-SMTPPORT = int(os.getenv("SMTP_PORT", "587"))
-SMTPEMAIL = os.getenv("SMTP_EMAIL")
-SMTPPASS = os.getenv("SMTP_PASSWORD")
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 
 # ---------------- CHECK SMTP ----------------
-def check_smtp_config():
-    if not SMTPSERVER or not SMTPEMAIL or not SMTPPASS:
-        raise HTTPException(status_code=500, detail="SMTP not configured")
+# def check_smtp_config():
+  #  if not SMTP_SERVER or not SMTP_EMAIL or not SMTP_PASSWORD:
+       # raise HTTPException(status_code=500, detail="SMTP not configured")
 
 
 # ---------------- REQUEST MODELS ----------------
@@ -46,18 +46,18 @@ def send_email(to_email: str, code: str):
 
     msg = MIMEText(f"Votre code de vérification est : {code}")
     msg["Subject"] = "Code de vérification"
-    msg["From"] = SMTPEMAIL
+    msg["From"] = SMTP_EMAIL
     msg["To"] = to_email
 
     context = ssl.create_default_context()
 
     try:
-        with smtplib.SMTP(SMTPSERVER, SMTPPORT, timeout=10) as server:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
-            server.login(SMTPEMAIL, SMTPPASS)
-            server.sendmail(SMTPEMAIL, to_email, msg.as_string())
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email error: {str(e)}")
