@@ -42,7 +42,7 @@ class OTPVerifyRequest(BaseModel):
 # ---------------- EMAIL ----------------
 def send_email(to_email: str, code: str):
 
-    check_smtp_config()
+    # check_smtp_config()
 
     msg = MIMEText(f"Votre code de vérification est : {code}")
     msg["Subject"] = "Code de vérification"
