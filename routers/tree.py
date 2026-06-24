@@ -6,13 +6,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models_sql import FamilyTree, Member, Marriage, ParentChild, Relationships
+from models_sql import FamilyTree, Member
 
-from schemas import FamilyTreeSchema  # ✅ ONLY ADD THIS
+from schemas import FamilyTreeSchema
 
 router = APIRouter(prefix="/trees", tags=["trees"])
 
 familyTrees: List[FamilyTree] = []
+
+
+# ---------------- HELPERS (IMPORTANT FIX) ----------------
+def member_to_dict(m: Member):
+    return {
+        "id": m.id,
+        "firstName": m.firstName,
+        "lastName": m.lastName,
+        "gender": m.gender,
+        "generation": m.generation,
+        "birthDate": m.birthDate,
+        "deathDate": m.deathDate,
+        "photo": m.photo,
+        "spouseId": m.spouseId,
+        "parentIds": m.parentIds or [],
+        "childrenIds": m.childrenIds or [],
+        "userId": m.userId,
+    }
 
 
 # ---------------- BUILD TREE ----------------
@@ -48,18 +66,16 @@ async def build_tree_from_get_db(user_id: str, db: AsyncSession) -> List[FamilyT
             if not m:
                 return
 
-            members.append(m)
+            members.append(member_to_dict(m))
             processed_ids.add(member_id)
 
             for c_id in (m.childrenIds or []):
-                parentChild.append(
-                    ParentChild(
-                        id=f"{member_id}_{c_id}",
-                        parentId=member_id,
-                        childId=c_id,
-                        userId=user_id
-                    )
-                )
+                parentChild.append({
+                    "id": f"{member_id}_{c_id}",
+                    "parentId": member_id,
+                    "childId": c_id,
+                    "userId": user_id
+                })
                 await collect_member(c_id)
 
             if m.spouseId:
@@ -71,13 +87,11 @@ async def build_tree_from_get_db(user_id: str, db: AsyncSession) -> List[FamilyT
                 if spouse:
                     await collect_member(spouse.id)
 
-                    marriages.append(
-                        Marriage(
-                            id=f"{member_id}_{spouse.id}",
-                            spouseIds=[member_id, spouse.id],
-                            userId=user_id
-                        )
-                    )
+                    marriages.append({
+                        "id": f"{member_id}_{spouse.id}",
+                        "spouseIds": [member_id, spouse.id],
+                        "userId": user_id
+                    })
 
         await collect_member(root.id)
 
@@ -88,10 +102,10 @@ async def build_tree_from_get_db(user_id: str, db: AsyncSession) -> List[FamilyT
                 name=f"{root.firstName} {root.lastName}",
                 ownerId=user_id,
                 members=members,
-                relationships=Relationships(
-                    marriages=marriages,
-                    parentChild=parentChild
-                ),
+                relationships={
+                    "marriages": marriages,
+                    "parentChild": parentChild
+                },
                 published=False
             )
 
@@ -110,7 +124,7 @@ async def build_tree_from_get_db(user_id: str, db: AsyncSession) -> List[FamilyT
 
 
 # ---------------- GET TREES ----------------
-@router.get("/", response_model=List[FamilyTreeSchema])  # ✅ FIX
+@router.get("/", response_model=List[FamilyTreeSchema])
 async def get_trees(user_id: str = None, db: AsyncSession = Depends(get_db)):
 
     if user_id:
@@ -126,7 +140,7 @@ async def get_trees(user_id: str = None, db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- GET ALL ----------------
-@router.get("/all", response_model=List[FamilyTreeSchema])  # ✅ FIX
+@router.get("/all", response_model=List[FamilyTreeSchema])
 async def get_all_trees(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
@@ -137,7 +151,7 @@ async def get_all_trees(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- FIND MEMBERS TREE ----------------
-@router.get("/find_members/{user_id}", response_model=FamilyTreeSchema)  # ✅ FIX
+@router.get("/find_members/{user_id}", response_model=FamilyTreeSchema)
 async def get_tree(user_id: str, db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
@@ -153,7 +167,7 @@ async def get_tree(user_id: str, db: AsyncSession = Depends(get_db)):
 
 
 # ---------------- ADD TREE ----------------
-@router.post("/add/{userid}", response_model=List[FamilyTreeSchema])  # ✅ FIX
+@router.post("/add/{userid}", response_model=List[FamilyTreeSchema])
 async def get_user_trees(userid: str, db: AsyncSession = Depends(get_db)):
 
     return await build_tree_from_get_db(userid, db)
@@ -176,23 +190,19 @@ async def create_or_update_family_tree(userId: str, db: AsyncSession):
     for m in members_list:
 
         for c_id in (m.childrenIds or []):
-            parent_child.append(
-                ParentChild(
-                    id=str(uuid.uuid4()),
-                    parentId=m.id,
-                    childId=c_id,
-                    userId=userId
-                )
-            )
+            parent_child.append({
+                "id": str(uuid.uuid4()),
+                "parentId": m.id,
+                "childId": c_id,
+                "userId": userId
+            })
 
         if m.spouseId:
-            marriages.append(
-                Marriage(
-                    id=str(uuid.uuid4()),
-                    spouseIds=[m.id, m.spouseId],
-                    userId=userId
-                )
-            )
+            marriages.append({
+                "id": str(uuid.uuid4()),
+                "spouseIds": [m.id, m.spouseId],
+                "userId": userId
+            })
 
     tree_name = "Family Tree"
     for m in members_list:
@@ -205,13 +215,17 @@ async def create_or_update_family_tree(userId: str, db: AsyncSession):
     )
     existing = result.scalars().first()
 
+    members_json = [member_to_dict(m) for m in members_list]
+
+    relationships_json = {
+        "marriages": marriages,
+        "parentChild": parent_child
+    }
+
     if existing:
         existing.name = tree_name
-        existing.members = members_list
-        existing.relationships = Relationships(
-            marriages=marriages,
-            parentChild=parent_child
-        )
+        existing.members = members_json
+        existing.relationships = relationships_json
 
         await db.commit()
         await db.refresh(existing)
@@ -221,11 +235,8 @@ async def create_or_update_family_tree(userId: str, db: AsyncSession):
         treeId=str(uuid.uuid4()),
         name=tree_name,
         ownerId=userId,
-        members=members_list,
-        relationships=Relationships(
-            marriages=marriages,
-            parentChild=parent_child
-        ),
+        members=members_json,
+        relationships=relationships_json,
         published=False
     )
 
