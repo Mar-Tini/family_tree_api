@@ -4,42 +4,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db
-from models import ParentChild, Relationships, Member
+from models_sql import ParentChild, Member   # FIXED IMPORT
 
 router = APIRouter(prefix="/parentchild", tags=["parentchild"])
 
+
+# ---------------- SCHEMA (Pydantic) ----------------
+from pydantic import BaseModel
+
+
+class ParentChildCreate(BaseModel):
+    parentId: str
+    childId: str
+
+
+class ParentChildOut(ParentChildCreate):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+
 # ---------------- GET ALL ----------------
-@router.get("/", response_model=List[ParentChild])
+@router.get("/", response_model=List[ParentChildOut])
 async def get_parentchild(db: AsyncSession = Depends(get_db)):
 
-    result = await db.execute(
-        select(Relationships).where(Relationships.type == "parentChild")
-    )
-
+    result = await db.execute(select(ParentChild))
     return result.scalars().all()
 
 
 # ---------------- ADD RELATION ----------------
-@router.post("/", response_model=ParentChild)
-async def add_parentchild(rel: ParentChild, db: AsyncSession = Depends(get_db)):
+@router.post("/", response_model=ParentChildOut)
+async def add_parentchild(rel: ParentChildCreate, db: AsyncSession = Depends(get_db)):
 
     # check existing relation
     result = await db.execute(
-        select(Relationships).where(
-            Relationships.type == "parentChild",
-            Relationships.parentId == rel.parentId,
-            Relationships.childId == rel.childId
+        select(ParentChild).where(
+            ParentChild.parentId == rel.parentId,
+            ParentChild.childId == rel.childId
         )
     )
 
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Relation already exists")
 
     # create relation
-    new_rel = Relationships(
-        type="parentChild",
+    new_rel = ParentChild(
+        id=str(uuid4()),
         parentId=rel.parentId,
         childId=rel.childId
     )
@@ -50,23 +63,23 @@ async def add_parentchild(rel: ParentChild, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Member).where(Member.id == rel.parentId)
     )
-    parent = result.scalar_one_or_none()
+    parent = result.scalars().first()
 
     if parent:
-        if not parent.childrenIds:
-            parent.childrenIds = []
-        parent.childrenIds.append(rel.childId)
+        parent.childrenIds = parent.childrenIds or []
+        if rel.childId not in parent.childrenIds:
+            parent.childrenIds.append(rel.childId)
 
     # update child
     result = await db.execute(
         select(Member).where(Member.id == rel.childId)
     )
-    child = result.scalar_one_or_none()
+    child = result.scalars().first()
 
     if child:
-        if not child.parentIds:
-            child.parentIds = []
-        child.parentIds.append(rel.parentId)
+        child.parentIds = child.parentIds or []
+        if rel.parentId not in child.parentIds:
+            child.parentIds.append(rel.parentId)
 
     await db.commit()
 
